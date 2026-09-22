@@ -1,0 +1,111 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: publisher
+  labels:
+    app.kubernetes.io/name: publisher
+    app.kubernetes.io/component: publisher
+    app.kubernetes.io/version: "3.13"
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: publisher
+        app.kubernetes.io/component: publisher
+        app.kubernetes.io/version: "3.13"
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        # Same image as the broker, same +10000 convention. rabbitmqadmin is a plain
+        # python script and needs no particular identity.
+        runAsUser: 10999
+        runAsGroup: 10999
+        fsGroup: 10999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        # The broker image purely as a client: it already ships rabbitmqadmin and the
+        # python3 it needs, so no image is built and nothing is installed at runtime.
+        - name: publisher
+          image: rabbitmq:3.13-management
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: BROKER_HOST
+              valueFrom:
+                configMapKeyRef: {name: platform-config, key: BROKER_HOST}
+            - name: BROKER_MANAGEMENT_PORT
+              valueFrom:
+                configMapKeyRef: {name: platform-config, key: BROKER_MANAGEMENT_PORT}
+            - name: QUEUE_NAME
+              valueFrom:
+                configMapKeyRef: {name: platform-config, key: QUEUE_NAME}
+            - name: BROKER_USER
+              valueFrom:
+                secretKeyRef: {name: rabbitmq-credentials, key: username}
+            - name: BROKER_PASS
+              valueFrom:
+                secretKeyRef: {name: rabbitmq-credentials, key: password}
+            # rabbitmqadmin is a python script and wants a writable HOME.
+            - name: HOME
+              value: /tmp
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              ADMIN="rabbitmqadmin --host=$BROKER_HOST --port=$BROKER_MANAGEMENT_PORT -u $BROKER_USER -p $BROKER_PASS"
+
+              # The forwarder owns the topology: it declares sdr_queue, .retry and .failed
+              # on startup. Publishing before that happens would silently drop the message,
+              # because an unroutable publish to the default exchange is discarded.
+              echo "Waiting for queue '$QUEUE_NAME' to be declared by the forwarder..."
+              i=0
+              while [ "$i" -lt 90 ]; do
+                if $ADMIN list queues name 2>/dev/null | grep -qw "$QUEUE_NAME"; then
+                  echo "Queue '$QUEUE_NAME' is present."
+                  break
+                fi
+                i=$((i + 1))
+                sleep 2
+              done
+              if ! $ADMIN list queues name 2>/dev/null | grep -qw "$QUEUE_NAME"; then
+                echo "Queue '$QUEUE_NAME' never appeared - is the forwarder running?" >&2
+                exit 1
+              fi
+
+              # Shape the forwarder actually parses (brief §6, §10.4): httpRequest and
+              # urlSuffix steer the REST call and are stripped from the log line but still
+              # forwarded in the body; deviceMessageType 1 is "Discovered". Types 3 and 4
+              # would be held back by the debouncer and must not be used here.
+              PAYLOAD=$(printf '{"httpRequest":"POST","urlSuffix":"/demo","deviceMessageType":1,"updateDate":"%s","deviceId":"kind-demo-001","friendlyName":"Stage 1 Demo Device","volume":42}' \
+                "$(date -u +%Y-%m-%dT%H:%M:%SZ)")
+
+              echo "Publishing to '$QUEUE_NAME': $PAYLOAD"
+              $ADMIN publish \
+                exchange=amq.default \
+                routing_key="$QUEUE_NAME" \
+                properties='{"content_type":"application/json","delivery_mode":2}' \
+                payload="$PAYLOAD"
+              echo "Published."
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+              ephemeral-storage: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+              ephemeral-storage: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

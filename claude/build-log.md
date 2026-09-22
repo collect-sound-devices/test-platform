@@ -77,3 +77,25 @@ Decision:  probes — readiness is the AMQP-connection check above, liveness is
            TTL — each overlay gets its own `QueueName` rather than identical retry delays everywhere or
            a PVC wiped by `make down`. The alternatives either forbid the overlays from differing in
            the setting the demo is about, or make §7's persistence claim untestable.
+
+## 2026-09-22 — Stage 1: manifests written and statically validated
+
+Goal:      the core chain as manifests: namespace, config, secret, broker, forwarder, sink, publisher.
+Change:    `base/` (namespace, configmap, secret.example, rabbitmq, sink, forwarder, publisher,
+           kustomization), `overlays/dev/`, `kind/kind-config.yaml`, `Makefile`, `scripts/up.sh`,
+           `scripts/verify.sh`.
+Verified:  `make verify` — kubeconform "8 resources found parsing stdin - Valid: 8, Invalid: 0,
+           Errors: 0"; kube-score clean on all six scored objects with two suppressions, leaving one
+           WARNING (sink single replica).
+           NOT verified: `make up` has not been run. The command was refused by the sandbox, so the
+           §14 acceptance test — pods Ready, publisher complete, message in the sink log — is
+           outstanding. Stage 1 is not done.
+Decision:  two kube-score criticals were fixed rather than suppressed, against the earlier plan to
+           suppress four checks. `readOnlyRootFilesystem` and uids above 10000 both turned out to work
+           for every container once the broker got emptyDirs on `/etc/rabbitmq/conf.d`,
+           `/var/log/rabbitmq` and `/tmp` — confirmed under `docker run --read-only --user 10999`,
+           management plugin still enabled, `rabbitmq-diagnostics status` OK after 7s. The mount is on
+           `conf.d` rather than `/etc/rabbitmq` because the latter holds `enabled_plugins`.
+           Only `pod-networkpolicy` (§9) and `container-image-pull-policy` (§7 mandates IfNotPresent)
+           remain suppressed. §9 also predicted a PodDisruptionBudget warning; kube-score v1.20.0 does
+           not emit one for single-replica workloads, so no suppression was needed for it.

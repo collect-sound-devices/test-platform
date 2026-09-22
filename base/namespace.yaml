@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: test-platform
+  labels:
+    app.kubernetes.io/name: test-platform
+    app.kubernetes.io/component: namespace
+    # Enforced, not merely audited: a container that cannot meet the restricted standard
+    # is a finding to report, not a reason to weaken the namespace (brief §7).
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted

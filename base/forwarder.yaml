@@ -1,0 +1,125 @@
+# No Service: the forwarder is a consumer only. It opens no listening socket at all
+# (verified — see README, "Why the forwarder has exec probes").
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: forwarder
+  labels:
+    app.kubernetes.io/name: forwarder
+    app.kubernetes.io/component: forwarder
+    app.kubernetes.io/version: "v3.4.3"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: forwarder
+      app.kubernetes.io/component: forwarder
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: forwarder
+        app.kubernetes.io/component: forwarder
+        app.kubernetes.io/version: "v3.4.3"
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        # The image has no USER instruction and would otherwise run as root. Its base
+        # image defines APP_UID=1654 ("app"); as with the broker, that is shifted by
+        # +10000 to stay clear of real accounts on the node. The process only reads from
+        # /app, which is world-readable, so the exact id does not matter to it.
+        runAsUser: 11654
+        runAsGroup: 11654
+        # Gives the emptyDirs below a deterministic group owner, so /app/logs is writable.
+        fsGroup: 11654
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: forwarder
+          image: danzigereduard/rmq-to-rest-api-forwarder:v3.4.3
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: DOTNET_ENVIRONMENT
+              valueFrom:
+                configMapKeyRef: {name: platform-config, key: DOTNET_ENVIRONMENT}
+            - name: RabbitMQ__Service__HostName
+              valueFrom:
+                configMapKeyRef: {name: platform-config, key: BROKER_HOST}
+            - name: RabbitMQ__Service__Port
+              valueFrom:
+                configMapKeyRef: {name: platform-config, key: BROKER_AMQP_PORT}
+            - name: RabbitMQ__Service__QueueName
+              valueFrom:
+                configMapKeyRef: {name: platform-config, key: QUEUE_NAME}
+            - name: RabbitMQ__Service__UserName
+              valueFrom:
+                secretKeyRef: {name: rabbitmq-credentials, key: username}
+            - name: RabbitMQ__Service__Password
+              valueFrom:
+                secretKeyRef: {name: rabbitmq-credentials, key: password}
+            - name: ApiBaseUrl__Target
+              valueFrom:
+                configMapKeyRef: {name: platform-config, key: ApiBaseUrl__Target}
+            - name: ApiBaseUrl__Local
+              valueFrom:
+                configMapKeyRef: {name: platform-config, key: ApiBaseUrl__Local}
+            - name: RabbitMQ__MessageDelivery__MaxRetryAttempts
+              valueFrom:
+                configMapKeyRef: {name: platform-config, key: RabbitMQ__MessageDelivery__MaxRetryAttempts}
+            - name: RabbitMQ__MessageDelivery__RetryDelayInSeconds
+              valueFrom:
+                configMapKeyRef: {name: platform-config, key: RabbitMQ__MessageDelivery__RetryDelayInSeconds}
+            - name: RabbitMQ__MessageDelivery__VolumeChangeEventDebouncingWindowInMilliseconds
+              valueFrom:
+                configMapKeyRef: {name: platform-config, key: RabbitMQ__MessageDelivery__VolumeChangeEventDebouncingWindowInMilliseconds}
+          # The forwarder serves no HTTP, so both probes are exec, and they check
+          # different things. Readiness asks whether the AMQP connection to the broker is
+          # actually established — this is what goes false when the broker is gone or when
+          # the forwarder is stuck in its topology-declaration retry loop. Liveness only
+          # asks whether the process still exists, deliberately: a forwarder patiently
+          # waiting for the broker must not be restarted, it recovers on its own.
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "netstat -tn | grep -q ':5672.*ESTABLISHED'"
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command: ["pgrep", "-f", "RmqToRestApiForwarder.dll"]
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+              ephemeral-storage: 32Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+              ephemeral-storage: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            # NLog is configured to write /app/logs/*.log, and /app is root-owned 755 so
+            # uid 1654 cannot create it. The container starts without this — NLog drops
+            # the file target silently and console logging still works — but then the
+            # on-disk log the upstream image promises is missing.
+            - name: logs
+              mountPath: /app/logs
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: logs
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

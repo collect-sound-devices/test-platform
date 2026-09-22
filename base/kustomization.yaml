@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: test-platform
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - rabbitmq.yaml
+  - sink.yaml
+  - forwarder.yaml
+  - publisher.yaml
+# secret.example.yaml is deliberately absent: the real Secret is created at deploy time
+# and the example only documents its keys (brief §7).
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: test-platform
+      app.kubernetes.io/managed-by: kustomize
+    # Selectors are written out in full on each workload. Letting kustomize inject into
+    # them would make label changes rewrite immutable selector fields on later applies.
+    includeSelectors: false

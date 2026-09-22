@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: platform-config
+  labels:
+    app.kubernetes.io/name: platform-config
+    app.kubernetes.io/component: config
+data:
+  # --- shared topology ---------------------------------------------------------------
+  # The broker's headless Service. The forwarder resolves this to rabbitmq-0's pod IP.
+  BROKER_HOST: "rabbitmq"
+  BROKER_AMQP_PORT: "5672"
+  BROKER_MANAGEMENT_PORT: "15672"
+
+  # The forwarder derives "<QueueName>.retry" and "<QueueName>.failed" from this single
+  # name, so the publisher and the demo script must read it from here too.
+  QUEUE_NAME: "sdr_queue"
+
+  # --- forwarder settings ------------------------------------------------------------
+  # .NET binds "Section:Key" from the environment as "Section__Key". The section path is
+  # RabbitMQ:MessageDelivery (brief §6) — NOT the C# record name the upstream README uses.
+  DOTNET_ENVIRONMENT: "Docker"
+
+  # "Local" is the only safe value here. An unrecognised Target logs a warning and falls
+  # back to "Azure", whose built-in default is a live public endpoint; "Codespace" makes
+  # every failed delivery call out to a third-party codespace-start URL.
+  ApiBaseUrl__Target: "Local"
+  ApiBaseUrl__Local: "http://sink:8080/api/AudioDevices"
+
+  RabbitMQ__MessageDelivery__MaxRetryAttempts: "3"
+  # Baked into the .retry queue as x-message-ttl when the forwarder declares it. Changing
+  # this against an existing broker volume makes the forwarder fail with
+  # PRECONDITION_FAILED and retry forever — see README, "Changing the retry delay".
+  RabbitMQ__MessageDelivery__RetryDelayInSeconds: "5"
+  RabbitMQ__MessageDelivery__VolumeChangeEventDebouncingWindowInMilliseconds: "400"

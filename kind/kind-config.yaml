@@ -1,0 +1,13 @@
+# One control-plane and two workers (brief §7).
+#
+# Multi-node from Stage 1 on purpose: kind's default storage class is
+# rancher/local-path-provisioner, whose PersistentVolumes are bound to the node that
+# first mounts them. On a single-node cluster that binding is invisible. Here it is real,
+# so the "delete rabbitmq-0, keep the messages" claim is actually being tested.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: test-platform
+nodes:
+  - role: control-plane
+  - role: worker
+  - role: worker

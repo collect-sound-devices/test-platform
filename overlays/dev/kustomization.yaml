@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+# Stage 1 ships only this overlay, because the two static checks need a built overlay to
+# run against. overlays/demo, and the settings that actually differ between the two,
+# belong to Stage 3 (brief §11).
+labels:
+  - pairs:
+      app.kubernetes.io/instance: dev
+    includeSelectors: false
