@@ -1,0 +1,11 @@
+# JetBrains project files
+.idea/
+
+# Session-local Claude Code state. .claude/settings.json, skills and agents stay committed.
+# .claude/settings.local.json
+.claude/worktrees/
+
+# Local overrides and generated cluster state
+*.local.yaml
+secret.yaml
+kubeconfig

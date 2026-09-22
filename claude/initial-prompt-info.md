@@ -86,11 +86,24 @@ Pin every tag explicitly. Never use `latest`.
 Per its README, the forwarder implements an event-forwarding pattern with a TTL-driven retry queue,
 a failed queue, ACK semantics and debouncing of frequent volume-change events. Relevant settings:
 
-- `RabbitMqMessageDeliverySettings:RetryDelayInSeconds`
-- `RabbitMqMessageDeliverySettings:MaxRetryAttempts`
-- `RabbitMqMessageDeliverySettings:VolumeChangeEventDebouncingWindowInMilliseconds`
+- `RabbitMQ:MessageDelivery:RetryDelayInSeconds`
+- `RabbitMQ:MessageDelivery:MaxRetryAttempts`
+- `RabbitMQ:MessageDelivery:VolumeChangeEventDebouncingWindowInMilliseconds`
 
-In Kubernetes these are environment variables in .NET notation: `Section__Key`.
+In Kubernetes these are environment variables in .NET notation, `Section__Key`:
+
+```
+RabbitMQ__MessageDelivery__RetryDelayInSeconds
+RabbitMQ__MessageDelivery__MaxRetryAttempts
+RabbitMQ__MessageDelivery__VolumeChangeEventDebouncingWindowInMilliseconds
+```
+
+The section path is `RabbitMQ:MessageDelivery`, bound in `Program.cs` by
+`config.GetSection("RabbitMQ:MessageDelivery")`. The forwarder's own README calls it
+`RabbitMqMessageDeliverySettings`, which is the name of the C# record the section binds *to*, not a
+configuration path — that name does not work as an environment variable. Verified 2026-09-22 against
+`v3.4.3`: the container echoes every bound value on startup in its "Consumer service parameters
+initialized" log line.
 
 The repository must be able to demonstrate, reproducibly:
 
