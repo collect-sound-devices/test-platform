@@ -24,6 +24,18 @@ It replaces the ad-hoc lab in `test-infrastructure`, which demonstrates cluster 
 Remote of the target: `https://github.com/collect-sound-devices/test-platform` (public).
 Do not re-clone or re-initialise it.
 
+The two reference paths are outside the working directory and must be granted to the session.
+`.claude/settings.local.json` in this repository does that for every session, CLI and desktop app alike:
+
+```json
+{ "permissions": { "additionalDirectories": ["../test-infrastructure", "../rmq-to-rest-api-forwarder"] } }
+```
+
+The key takes effect once the folder is trusted, which Claude Code asks about on first start.
+From the CLI the same is possible per session with `claude --add-dir ../test-infrastructure
+--add-dir ../rmq-to-rest-api-forwarder`, or mid-session with `/add-dir`. The desktop app has no UI
+control for it: local sessions there work with a single project folder.
+
 Do not import history from `test-infrastructure`: plaintext broker credentials and a runtime
 `apt-get` step exist in its old commits.
 
@@ -104,20 +116,26 @@ Provide this as a script (`scripts/demo-retry.sh`), not as prose in the README.
 | Kustomize | `base/` plus `overlays/dev` and `overlays/demo` |
 | RBAC | ServiceAccount, Role and RoleBinding with least privilege |
 | Multi-node | kind config with one control-plane and two workers |
+| Pod security | every container satisfies the **restricted** Pod Security Standard: `runAsNonRoot: true`, `allowPrivilegeEscalation: false`, `capabilities.drop: [ALL]`, `seccompProfile.type: RuntimeDefault`. Enforce it on the namespace with the `pod-security.kubernetes.io/enforce: restricted` label. If an upstream image cannot run non-root, report it instead of weakening the namespace |
+| Labels | the recommended set on every object: `app.kubernetes.io/name`, `/instance`, `/version`, `/component`, `/part-of`, `/managed-by` |
+| Static validation | `kustomize build <overlay> | kubeconform -strict -summary -` and `| kube-score score -` both pass, or a suppressed check is justified in the log (§9) |
 
 ## 8. Repository layout
 
 ```
 test-platform/
-├── README.md              architecture, one start command, the three demo steps, stated limits
+├── README.md              architecture, one start command, the three demo steps, stated limits,
+│                       tested tool versions (kind, kubectl, kustomize), "not for production" note
 ├── LICENSE                exists
-├── .gitignore             to fill: .idea/, *.local.yaml, secret.yaml, kubeconfig
+├── .gitignore             to fill: .idea/, .claude/settings.local.json, .claude/worktrees/,
+│                       *.local.yaml, secret.yaml, kubeconfig
 ├── Makefile               up / down / demo / verify
 ├── kind/kind-config.yaml  control-plane + 2 workers
 ├── base/                  namespace, configmap, secret.example, rabbitmq StatefulSet + services,
 │                          forwarder Deployment + service, sink, publisher Job, rbac
 ├── overlays/dev|demo/     replicas, resources, log level
 ├── scripts/               up.sh, demo-retry.sh, verify.sh
+├── claude/                this brief, build-log.md (§12)
 └── .github/workflows/     ci.yaml: kubeconform, kind, readiness wait, log assertion
 ```
 
@@ -125,6 +143,10 @@ test-platform/
 
 - **NetworkPolicy** — kindnet does not enforce it by default. A manifest that has no effect is worse
   than none.
+- **PodDisruptionBudget** — meaningless for the single-replica workloads here.
+
+  `kube-score` flags both. Suppress those two checks explicitly and record why in the build log.
+  Do not add an inert manifest to make a linter quiet.
 - Helm — Kustomize is sufficient here.
 - Service mesh, Prometheus stack, autoscaling.
 - Any image build. If a component needs an image that does not exist publicly, report it instead of
@@ -147,7 +169,9 @@ These are unverified. Check them, report the findings, and wait for a decision b
 
 Each stage is verified before the next begins.
 
-- **Stage 0 — hygiene.** Fill the root `.gitignore`, `git rm -r --cached .idea`, README skeleton. One commit.
+- **Stage 0 — hygiene.** Fill the root `.gitignore` (§8), `git rm -r --cached .idea`, README skeleton.
+  One commit. Keep `.claude/settings.json`, skills and agents committable — only the local settings
+  file and the worktrees directory are ignored. Do not modify `LICENSE`, `CLAUDE.md` or this brief.
 - **Stage 1 — core.** Namespace, ConfigMap, Secret, broker StatefulSet with PVC, forwarder, sink,
   publisher Job, probes, limits, `make up`, README.
 - **Stage 2 — CI.** GitHub Actions: `kubeconform` over all manifests, then `helm/kind-action`,
@@ -156,7 +180,38 @@ Each stage is verified before the next begins.
   until it is.
 - **Stage 3 — extensions.** Kustomize overlays, `demo-retry.sh`, RBAC, metrics-server, multi-node cluster.
 
-## 12. Working rules
+## 12. Build log
+
+Keep `claude/build-log.md`, append-only. It is a decision log, not a transcript.
+
+**Write one entry per completed unit of work** — a stage, a Step 0 finding, a component of Stage 1,
+a CI iteration that produced a lesson. Not per command and not per file.
+
+Entry format, four short parts:
+
+```
+## <date> — <what was done>
+Goal:      one line — what this had to achieve
+Change:    what was added or changed, by path
+Verified:  the command run and its relevant output, abbreviated
+Decision:  what was chosen over what, and why — only when there was a real alternative
+```
+
+Rules:
+
+- `Verified` must name a command and its actual result. "Looks correct" is not a verification.
+- `Decision` is the part with lasting value. Record rejected alternatives: Deployment vs. StatefulSet,
+  exec probe vs. HTTP probe, secretGenerator vs. `kubectl create secret`. Omit the line when the choice
+  was obvious.
+- Keep an entry under roughly ten lines. If it grows past that, the content belongs in the README or
+  in a comment next to the manifest, not in the log.
+- Do not log command history, tool calls, or failed attempts that taught nothing.
+- Append; never rewrite earlier entries. Corrections are a new entry.
+
+Progress narration in the session stays short: state what is being attempted and what the verification
+showed. Do not restate the goal, the plan and the result for every command.
+
+## 13. Working rules
 
 - No plaintext credentials in any committed file.
 - No package installation at container runtime.
@@ -164,8 +219,10 @@ Each stage is verified before the next begins.
 - Edit files in place; never retype file content from truncated tool output.
 - Report what does not work instead of routing around it. No manifest that merely looks operational.
 - The README must claim nothing the repository does not deliver.
+- Put the reasoning where the reader needs it: a non-obvious value belongs in a comment next to it
+  (why this probe command, why this memory limit, why a headless service), not only in the log of §12.
 
-## 13. Definition of done, per stage
+## 14. Definition of done, per stage
 
 Stage 1 is done when, on a **freshly created** cluster:
 
