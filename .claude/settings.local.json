@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "additionalDirectories": [
+      "../test-infrastructure",
+      "../rmq-to-rest-api-forwarder"
+    ]
+  }
+}
