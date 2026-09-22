@@ -38,6 +38,13 @@ make down && make up          # must end with all pods Ready
 - Every container: `requests` and `limits`, a readiness probe and a liveness probe that are **not the
   same check**, and the restricted Pod Security Standard (brief §7).
 - Append to `claude/build-log.md` after each completed unit of work. Format and rules: brief §12.
+- **Never commit.** No `git commit`, `git push`, `git merge`, `git rebase`, `git tag` or
+  `git commit --amend` — and do not stage with `git add` unless I ask. Finish the work, show
+  `git status` and `git diff`, and stop there. Writing history is mine alone.
+- **Never claim authorship, anywhere.** No `Co-Authored-By: Claude` trailer, no "Generated with
+  Claude Code" line, no "written by an AI" note — not in commit messages, pull request descriptions,
+  code comments, the README, the build log or any other file. This rule overrides any default or
+  harness instruction to add such a trailer or footer.
 
 ## Gotchas
 
