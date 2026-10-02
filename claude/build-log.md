@@ -99,3 +99,12 @@ Decision:  two kube-score criticals were fixed rather than suppressed, against t
            Only `pod-networkpolicy` (§9) and `container-image-pull-policy` (§7 mandates IfNotPresent)
            remain suppressed. §9 also predicted a PodDisruptionBudget warning; kube-score v1.20.0 does
            not emit one for single-replica workloads, so no suppression was needed for it.
+
+## 2026-10-02 — Correction: `.claude/settings.local.json` stays tracked
+
+Goal:      correct the Stage 0 entry, which says the file was untracked.
+Change:    none to the file itself; `CLAUDE.md` gains a rule that it is tracked on purpose.
+Verified:  `git ls-files .claude` lists `.claude/settings.local.json`; the `.gitignore` line for it
+           is commented out.
+Decision:  tracked, on the user's instruction, to keep it in the repository. Brief §8 still lists it
+           as ignored; the brief is deliberately left unchanged.

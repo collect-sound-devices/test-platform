@@ -54,6 +54,7 @@ make down && make up          # must end with all pods Ready
 - The history of `test-infrastructure` contains plaintext broker credentials and a runtime `apt-get`
   step. Never import it, and never copy those patterns forward.
 - The forwarder is a .NET service: its settings map to environment variables as `Section__Key`.
+- `.claude/settings.local.json` is tracked on purpose. Do not untrack or ignore it.
 
 ## Working style
 
