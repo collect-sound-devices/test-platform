@@ -122,3 +122,22 @@ Verified:  `./scripts/verify.sh` exit 0, "Static validation passed."; `PATH=/usr
 Decision:  the kustomize version stays unpinned. The linters are pinned containers, but the renderer
            is whatever `kubectl` the host carries — v5.8.1 here — so CI can render different YAML
            than a developer. Pinning it needs a third container; reported, not fixed.
+## 2026-10-02 — Stage 1 acceptance attempted in a cloud container: blocked by the host
+
+Goal:      run `make down && make up` (brief §14) somewhere other than the user's machine.
+Change:    none to the repository; kind v0.33.0 and kubectl v1.37.1 installed in the container.
+Verified:  `make up` failed in kubeadm `wait-control-plane`; the kubelet logged "kubelet is configured
+           to not run on a host using cgroup v1" (node image v1.37.0, `failCgroupV1: true`). With that
+           overridden in a scratch kind config, runc then failed on
+           `/proc/self/oom_score_adj: Permission denied` — the container lacks CAP_SYS_RESOURCE.
+           A Docker Hub pull also returned `429 Too Many Requests`. Stage 1 is still not done.
+Decision:  no cgroup v1 override in `kind/kind-config.yaml`; the acceptance run moves to the user's
+           machine.
+
+## 2026-10-02 — README brought to the Stage 1 state
+
+Goal:      a README that claims nothing the repository does not deliver (brief §13).
+Change:    `README.md` — status, architecture, quick start, make targets, the two sections the
+           manifest comments point to ("Why the forwarder has exec probes", "Changing the retry
+           delay"), limits.
+Verified:  `grep -n 'see README' base/*.yaml` — both referenced section titles now exist in `README.md`.
