@@ -20,12 +20,19 @@ IGNORED_TESTS=(
 
 cd "$(dirname "$0")/.."
 
+# Every step below assumes these. Checking first names the missing dependency, instead of
+# failing mid-run on a "command not found" under a header that says something else.
+for cmd in kubectl docker; do
+  command -v "$cmd" >/dev/null || { echo "verify: $cmd is not on PATH" >&2; exit 1; }
+done
+docker info >/dev/null 2>&1 || { echo "verify: the docker daemon is not reachable" >&2; exit 1; }
+
 ignore_args=()
 for t in "${IGNORED_TESTS[@]}"; do
   ignore_args+=(--ignore-test "$t")
 done
 
-echo "==> kustomize build $OVERLAY"
+echo "==> kubectl kustomize $OVERLAY"
 kubectl kustomize "$OVERLAY" > /tmp/test-platform-built.yaml
 echo "    $(grep -c '^kind:' /tmp/test-platform-built.yaml) resources built"
 

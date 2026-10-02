@@ -108,3 +108,17 @@ Verified:  `git ls-files .claude` lists `.claude/settings.local.json`; the `.git
            is commented out.
 Decision:  tracked, on the user's instruction, to keep it in the repository. Brief §8 still lists it
            as ignored; the brief is deliberately left unchanged.
+
+## 2026-10-02 — `verify.sh` preflight, and the documented checks reconciled
+
+Goal:      `make verify` should name a missing dependency instead of failing mid-run, and `CLAUDE.md`
+           should document the check that actually exists.
+Change:    `scripts/verify.sh` — preflight for `kubectl`, `docker` and daemon reachability; the first
+           header now reads `kubectl kustomize`, which is the command it runs. `CLAUDE.md` §Checks —
+           two pipelines requiring host tools that are not installed, replaced by `make verify`.
+Verified:  `./scripts/verify.sh` exit 0, "Static validation passed."; `PATH=/usr/bin:/bin` gives
+           "verify: kubectl is not on PATH" exit 1; an unreachable `DOCKER_HOST` gives "verify: the
+           docker daemon is not reachable" exit 1.
+Decision:  the kustomize version stays unpinned. The linters are pinned containers, but the renderer
+           is whatever `kubectl` the host carries — v5.8.1 here — so CI can render different YAML
+           than a developer. Pinning it needs a third container; reported, not fixed.

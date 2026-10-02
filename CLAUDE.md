@@ -19,13 +19,15 @@ previous one is approved.
 ## Checks
 
 Run these before proposing any commit, and paste the output. A claim of success without output is not
-a result. (The first two apply from Stage 1, once `base/` and `overlays/` exist.)
+a result. (`make verify` applies from Stage 1, once `base/` and `overlays/` exist.)
 
 ```bash
-kustomize build overlays/dev | kubeconform -strict -summary -
-kustomize build overlays/dev | kube-score score -
+make verify                   # kustomize build, then kubeconform and kube-score; no cluster needed
 make down && make up          # must end with all pods Ready
 ```
+
+`make verify` runs the two linters as pinned containers, so none of them has to be installed on the
+host. `OVERLAY=overlays/<name> make verify` checks a different overlay.
 
 ## Hard rules
 
